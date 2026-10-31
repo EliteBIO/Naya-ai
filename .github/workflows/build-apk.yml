@@ -1,0 +1,50 @@
+
+name: Build NAYA Phase 2 APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'NAYA-AI-PHASE2.zip'
+      - '.github/workflows/build-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Verify Android SDK
+        run: |
+          echo "Android SDK: $ANDROID_HOME"
+          test -d "$ANDROID_HOME"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Extract Phase 2
+        run: |
+          test -f NAYA-AI-PHASE2.zip
+          unzip -q NAYA-AI-PHASE2.zip -d _src
+
+      - name: Build APK
+        run: |
+          gradle -p _src/NAYA-AI assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAYA-PHASE2-APK
+          path: _src/NAYA-AI/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          
