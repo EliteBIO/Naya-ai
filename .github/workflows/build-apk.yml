@@ -1,55 +1,84 @@
-name: Build NAYA AI debug APK
+
+name: Build NAYA Master APK
 
 on:
-  push:
-    branches: [main, master]
   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'NAYA-MASTER-PROJECT.zip'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
 
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: 8.10.2
-
-      # Phone-friendly: if the repo holds a project .zip instead of loose files, unzip it first.
-      - name: Locate project
-        id: loc
+      - name: Check Android SDK
         run: |
-          if [ -f settings.gradle.kts ]; then
-            echo "dir=." >> "$GITHUB_OUTPUT"
-          else
-            f=$(ls *.zip | sort -V | tail -n1)
-            mkdir -p _src
-            unzip -q "$f" -d _src
-            d=$(dirname "$(find _src -name settings.gradle.kts | head -n1)")
-            echo "dir=$d" >> "$GITHUB_OUTPUT"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          test -d "$ANDROID_HOME"
+          echo "Android SDK found"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Extract NAYA Master Project
+        run: |
+          test -f NAYA-MASTER-PROJECT.zip
+          mkdir -p _src
+          unzip -q NAYA-MASTER-PROJECT.zip -d _src
+
+      - name: Locate Android project
+        id: project
+        run: |
+          SETTINGS=$(find _src -type f \( \
+            -name settings.gradle.kts -o \
+            -name settings.gradle \
+          \) -print -quit)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "Gradle settings file not found"
+            exit 1
           fi
 
-      # Optional: face images uploaded to the repo root (expr_happy.png, naya_open.png ...) are added to the app.
-      - name: Add face images
-        working-directory: ${{ steps.loc.outputs.dir }}
+          PROJECT_DIR=$(dirname "$SETTINGS")
+
+          if [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ] && \
+             [ ! -f "$PROJECT_DIR/app/build.gradle" ]; then
+            echo "Android app module not found"
+            exit 1
+          fi
+
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Project found: $PROJECT_DIR"
+
+      - name: Build NAYA Debug APK
+        working-directory: ${{ steps.project.outputs.dir }}
         run: |
-          mkdir -p app/src/main/res/drawable-nodpi
-          shopt -s nullglob
-          for f in "$GITHUB_WORKSPACE"/expr_* "$GITHUB_WORKSPACE"/naya_open.* "$GITHUB_WORKSPACE"/naya_blink.*; do
-            cp -v "$f" app/src/main/res/drawable-nodpi/
-          done
+          gradle assembleDebug --stacktrace
 
-      - name: Build debug APK
-        working-directory: ${{ steps.loc.outputs.dir }}
-        run: gradle assembleDebug --stacktrace
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload NAYA APK
+        uses: actions/upload-artifact@v4
         with:
-          name: NAYA-AI-debug-apk
-          path: ${{ steps.loc.outputs.dir }}/app/build/outputs/apk/debug/*.apk
+          name: NAYA-MASTER-APK
+          path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
           
