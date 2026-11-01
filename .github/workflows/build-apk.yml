@@ -34,6 +34,16 @@ jobs:
             echo "dir=$d" >> "$GITHUB_OUTPUT"
           fi
 
+      # Optional: face images uploaded to the repo root (expr_happy.png, naya_open.png ...) are added to the app.
+      - name: Add face images
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: |
+          mkdir -p app/src/main/res/drawable-nodpi
+          shopt -s nullglob
+          for f in "$GITHUB_WORKSPACE"/expr_* "$GITHUB_WORKSPACE"/naya_open.* "$GITHUB_WORKSPACE"/naya_blink.*; do
+            cp -v "$f" app/src/main/res/drawable-nodpi/
+          done
+
       - name: Build debug APK
         working-directory: ${{ steps.loc.outputs.dir }}
         run: gradle assembleDebug --stacktrace
@@ -42,3 +52,4 @@ jobs:
         with:
           name: NAYA-AI-debug-apk
           path: ${{ steps.loc.outputs.dir }}/app/build/outputs/apk/debug/*.apk
+          
